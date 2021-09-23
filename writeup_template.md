@@ -447,28 +447,45 @@ CostEvaluation::CostEvaluation(TrajectoryXY const &trajectory, TargetConfig targ
     double cost_legality    = 0;    // vs speed limits
     double cost_comfort     = 0;    // vs jerk
     double cost_efficiency  = 0;    // vs desired lane and time to goal
-    
+
     std::map<int, vector<Coord> > predictions = predict.get_predictions();
-    
+
     // 1) FEASIBILITY cost
-    cost_feasibility += CheckCollisionOnTrajectory(trajectory, predictions);
+    if (CheckCollisionOnTrajectory(trajectory, predictions))
+    {
+        cost_feasibility += 10;
+    }
+
+    vector<vector<double>> traj;
+    traj.push_back(trajectory.x_vals);
+    traj.push_back(trajectory.y_vals);
+    if (CheckMaxCapabilities(traj))
+    {
+        cost_feasibility += 1;
+    }
+
     m_dCost = m_dCost + PARAM_COST_FEASIBILITY * cost_feasibility;
-    
+
     // 2) SAFETY cost
+    double dmin = GetPredictedMinDistance(trajectory, predictions);
+    if (dmin < predict.GetSafetyDistance())
+    {
+        cost_safety = predict.GetSafetyDistance() - dmin;
+    }
+
     m_dCost = m_dCost + PARAM_COST_SAFETY * cost_safety;
-    
+
     // 3) LEGALITY cost
     m_dCost = m_dCost + PARAM_COST_LEGALITY * cost_legality;
-    
+
     // 4) COMFORT cost
     m_dCost = m_dCost + PARAM_COST_COMFORT * cost_comfort;
-    
+
     // 5) EFFICIENCY cost
     cost_efficiency = PARAM_FOV - predict.GetLaneFreeSpace(target.lane);
     m_dCost = m_dCost + PARAM_COST_EFFICIENCY * cost_efficiency;
-    
-    cout << "car_lane=" << car_lane << " target.lane=" << target.lane << " target_lvel=" << predict.GetLaneSpeed(target.lane) << " cost=" << m_dCost << endl;
 
+    cout << "car_lane=" << car_lane << " target.lane=" << target.lane << " target_lvel=" << predict.GetLaneSpeed(target.lane) << " cost=" << m_dCost << endl;
 }
 ```
 

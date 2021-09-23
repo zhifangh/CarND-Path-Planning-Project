@@ -31,6 +31,8 @@ void Map::Import(string map_file)
 {
     ifstream isMap(map_file.c_str(), ifstream::in);
     string line;
+    bool not_started = true;
+    double x0, y0, dx0, dy0;
 
     double last_s = 0;
 
@@ -47,6 +49,12 @@ void Map::Import(string map_file)
         iss >> d_x;
         iss >> d_y;
 
+        if (not_started)
+        {
+            x0 = x; y0 = y; dx0 = d_x; dy0 = d_y;
+            not_started = false;
+        }
+
         m_waypointsX.push_back(x);
         m_waypointsY.push_back(y);
         m_waypointsS.push_back(s);
@@ -56,12 +64,57 @@ void Map::Import(string map_file)
     }
     assert(m_waypointsX.size() && "map not loaded, probably path include is missing");
 
-    MAX_S = last_s;
+    MAX_S = MAXIMUM_S;
+
+    // to get a good spline approximation on last segment wrapping around
+    m_waypointsX.push_back(x0);
+    m_waypointsY.push_back(y0);
+    m_waypointsS.push_back(MAX_S);
+    m_waypointsDx.push_back(dx0);
+    m_waypointsDy.push_back(dy0);
 
     m_splineX.set_points(m_waypointsS, m_waypointsX);
     m_splineY.set_points(m_waypointsS, m_waypointsY);
     m_splineDx.set_points(m_waypointsS, m_waypointsDx);
     m_splineDy.set_points(m_waypointsS, m_waypointsDy);
+
+    // remove last point so we do not have duplicates (x,y): it was just for spline continuity at wraparound
+    m_waypointsX.pop_back();
+    m_waypointsY.pop_back();
+    m_waypointsS.pop_back();
+    m_waypointsDx.pop_back();
+    m_waypointsDy.pop_back();
+
+    m_waypointsX.clear();
+    m_waypointsY.clear();
+    m_waypointsS.clear();
+    m_waypointsDx.clear();
+    m_waypointsDy.clear();
+
+    for (double s = 0; s <= floor(MAX_S); s++)
+    {
+        double x = m_splineX(s);
+        double y = m_splineY(s);
+        double dx = m_splineDx(s);
+        double dy = m_splineDy(s);
+
+        m_waypointsS.push_back(s);
+        m_waypointsX.push_back(x);
+        m_waypointsY.push_back(y);
+        m_waypointsDx.push_back(dx);
+        m_waypointsDy.push_back(dy);
+    }
+
+//    double frenet_s = 0.0;
+//    m_waypointsS.push_back(0.0);
+//    // new map: 1 point every meter
+//    for (size_t i = 1; i < m_waypointsX.size(); i++)
+//    {
+//        frenet_s += distance(m_waypointsX[i], m_waypointsY[i], m_waypointsX[i-1], m_waypointsY[i-1]);
+//        //new_map_s.push_back(frenet_s); // TODO test both alternatives
+//        m_waypointsS.push_back(i); // better
+//        cout << "frenet_s=" << frenet_s << " " << i << endl;
+//    }
 }
 
 int Map::ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y)
@@ -94,18 +147,18 @@ int Map::NextWaypoint(double x, double y, double theta, const vector<double> &ma
 
     double heading = atan2((dClosestWaypointY-y), (dClosestWaypointX-x));
 
-	double angle = fabs(theta-heading);
+    double angle = fabs(theta-heading);
     angle = min(2 * M_PI - angle, angle);
 
-	if(angle > M_PI/4)
-	{
+    if(angle > M_PI/4)
+    {
         // (x, y) is before (dClosestWaypointX, dClosestWaypointY)
         iClosestWaypointIndex++;
         if (iClosestWaypointIndex == maps_x.size())
         {
-          iClosestWaypointIndex = 0; // loop
+            iClosestWaypointIndex = 0; // loop
         }
-	}
+    }
 
     return iClosestWaypointIndex;
 }
@@ -139,6 +192,14 @@ vector<double> Map::getFrenet(double x, double y, double theta)
     double frenet_d = distance(prev_x, prev_y, proj_x, proj_y);
 
     //see if d value is positive or negative by comparing it to a center point
+    double center_x = PARAM_CENTER_X - maps_x[prev_wp];
+    double center_y = PARAM_CENTER_Y - maps_y[prev_wp];
+    double centerToPos = distance(center_x,center_y,prev_x,prev_y);
+    double centerToRef = distance(center_x,center_y,proj_x,proj_y);
+
+    if (centerToPos <= centerToRef) {
+        frenet_d *= -1;
+    }
     double frenet_s = maps_s[prev_wp];
     frenet_s += distance(0, 0, proj_x, proj_y);
 

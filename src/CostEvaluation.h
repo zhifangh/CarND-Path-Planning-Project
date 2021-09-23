@@ -31,10 +31,8 @@ private:
     bool CheckCollision(double x0, double y0, double theta0, double x1, double y1, double theta1);
     int  CheckCollisionOnTrajectory(struct TrajectoryXY const &trajectory, std::map<int, std::vector<Coord> > &predictions);
 
-#if 0
     bool CheckMaxCapabilities(std::vector<std::vector<double>> &traj);
     double GetPredictedMinDistance(struct TrajectoryXY const &trajectory, std::map<int, std::vector<Coord> > &predictions);
-#endif
 
     double m_dCost;
 };

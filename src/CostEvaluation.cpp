@@ -119,7 +119,6 @@ int CostEvaluation::CheckCollisionOnTrajectory(TrajectoryXY const &trajectory, s
     return 0;
 }
 
-#if 0
 // check max speed, acceleration, jerk
 bool CostEvaluation::CheckMaxCapabilities(vector<vector<double>> &traj)
 {
@@ -177,6 +176,7 @@ bool CostEvaluation::CheckMaxCapabilities(vector<vector<double>> &traj)
 
     if (roundf(max_vel) > PARAM_MAX_SPEED || roundf(max_acc) > PARAM_MAX_ACCEL || jerk_per_second > PARAM_MAX_JERK)
     {
+		cout << "max_vel=" << max_vel << " max_acc=" << max_acc << " jerk_per_second=" << jerk_per_second  << endl;
         return true;
     }
     else
@@ -221,7 +221,6 @@ double CostEvaluation::GetPredictedMinDistance(TrajectoryXY const &trajectory, s
     cout << "=====> dmin = " << dmin << endl;
     return dmin;
 }
-#endif
 
 double CostEvaluation::GetCost() const
 {
@@ -253,10 +252,28 @@ CostEvaluation::CostEvaluation(TrajectoryXY const &trajectory, TargetConfig targ
     std::map<int, vector<Coord> > predictions = predict.get_predictions();
 
     // 1) FEASIBILITY cost
-    cost_feasibility += CheckCollisionOnTrajectory(trajectory, predictions);
+    if (CheckCollisionOnTrajectory(trajectory, predictions))
+    {
+        cost_feasibility += 10;
+    }
+
+    vector<vector<double>> traj;
+    traj.push_back(trajectory.x_vals);
+    traj.push_back(trajectory.y_vals);
+    if (CheckMaxCapabilities(traj))
+    {
+        cost_feasibility += 1;
+    }
+
     m_dCost = m_dCost + PARAM_COST_FEASIBILITY * cost_feasibility;
 
     // 2) SAFETY cost
+    double dmin = GetPredictedMinDistance(trajectory, predictions);
+    if (dmin < predict.GetSafetyDistance())
+    {
+        cost_safety = predict.GetSafetyDistance() - dmin;
+    }
+
     m_dCost = m_dCost + PARAM_COST_SAFETY * cost_safety;
 
     // 3) LEGALITY cost
@@ -271,6 +288,7 @@ CostEvaluation::CostEvaluation(TrajectoryXY const &trajectory, TargetConfig targ
 
     cout << "car_lane=" << car_lane << " target.lane=" << target.lane << " target_lvel=" << predict.GetLaneSpeed(target.lane) << " cost=" << m_dCost << endl;
 }
+
 
 CostEvaluation::~CostEvaluation()
 {
